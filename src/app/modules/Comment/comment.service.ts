@@ -34,7 +34,7 @@ const deleteComment = async (commentId: string): Promise<IComment | null> => {
   return comment;
 };
 
-const getCommentForPostId = async (postId: string) => {
+const getCommentForPostId = async (postId: string,userId:string) => {
   const comments = await CommentModel.find({ post: postId })
     .populate("author", "fullName image")
     .populate("likes","user type")

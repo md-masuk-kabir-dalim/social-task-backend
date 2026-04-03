@@ -66,8 +66,8 @@ const deleteComment = catchAsync(async (req: Request, res: Response) => {
 
 const getCommentsByPost = catchAsync(async (req: Request, res: Response) => {
   const { postId } = req.params;
-
-  const result = await CommentService.getCommentForPostId(postId);
+  const userId = req.user?.id;
+  const result = await CommentService.getCommentForPostId(postId, userId);
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
