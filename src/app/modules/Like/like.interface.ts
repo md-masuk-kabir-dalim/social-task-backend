@@ -6,5 +6,5 @@ export interface ILike {
   comment?: Types.ObjectId;
   reply?: Types.ObjectId;
   type?: "like" | "dislike";
-  createdAt: Date;
+  createdAt?: Date;
 }

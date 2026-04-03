@@ -26,11 +26,10 @@ CommentSchema.virtual("replies", {
 });
 
 // Total likes of comment
-CommentSchema.virtual("likesCount", {
+CommentSchema.virtual("likes", {
   ref: "Like",
   localField: "_id",
   foreignField: "comment",
-  count: true,
 });
 
 export const CommentModel = model<IComment>("Comment", CommentSchema);

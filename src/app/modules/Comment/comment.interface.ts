@@ -7,3 +7,14 @@ export interface IComment {
   createdAt: Date;
   updatedAt: Date;
 }
+
+
+
+export interface ICommentWithLikes extends IComment {
+  _id: Types.ObjectId;                   
+  isLikedByCurrentUser?: boolean;        
+  replies?: (IComment & {              
+    _id: Types.ObjectId;
+    isLikedByCurrentUser?: boolean;
+  })[];
+}

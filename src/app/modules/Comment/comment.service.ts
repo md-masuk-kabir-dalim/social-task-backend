@@ -11,7 +11,7 @@ const createComment = async (
 const getCommentById = async (commentId: string): Promise<IComment | null> => {
   const comment = await CommentModel.findById(commentId)
     .populate("author", "name email")
-    .populate("likesCount")
+    .populate("likes","user type")
     .populate({
       path: "replies",
       populate: { path: "author", select: "name email" },
@@ -36,11 +36,11 @@ const deleteComment = async (commentId: string): Promise<IComment | null> => {
 
 const getCommentForPostId = async (postId: string) => {
   const comments = await CommentModel.find({ post: postId })
-    .populate("author", "name email")
-    .populate("likesCount")
+    .populate("author", "fullName image")
+    .populate("likes","user type")
     .populate({
       path: "replies",
-      populate: { path: "author", select: "name email" },
+      populate: { path: "author", select: "fullName image" },
     });
   return comments;
 };

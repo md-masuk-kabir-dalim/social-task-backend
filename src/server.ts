@@ -12,7 +12,6 @@ async function main() {
     const server = http.createServer(app);
 
     connectDB();
-    await initiateSuperAdmin();
 
     // Start server
     server.listen(config.port, () => {

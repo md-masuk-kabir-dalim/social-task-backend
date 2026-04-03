@@ -5,7 +5,10 @@ import { IPost } from "./post.interface";
 const PostSchema = new Schema<IPost>(
   {
     content: { type: String, required: true },
-    image: ImageSchema,
+     image: {
+      type: ImageSchema,
+      required: false,
+    },
     author: { type: Schema.Types.ObjectId, ref: "User", required: true },
     policy: {
       type: String,
@@ -46,5 +49,7 @@ PostSchema.virtual("comments", {
   localField: "_id",
   foreignField: "post",
 });
+
+PostSchema.index({ content: "text" });
 
 export const PostModel = model<IPost>("Post", PostSchema);

@@ -1,12 +1,14 @@
-import { Document, Types } from "mongoose";
+import {  Types } from "mongoose";
 import { IPost } from "./post.interface";
 import { PostModel } from "./post.model";
 import { searchPaginate } from "../../../helpers/searchAndPaginate";
+const isValidObjectId = (id: string) => Types.ObjectId.isValid(id);
 
 const createPost = async (postData: Partial<IPost>): Promise<IPost> => {
-  const post = await PostModel.create(postData);
-  return post;
+  const created = await PostModel.create(postData);
+  return created;
 };
+
 
 const getPostById = async (postId: string): Promise<IPost | null> => {
   const post = await PostModel.findById(postId)
@@ -35,39 +37,57 @@ const deletePost = async (postId: string): Promise<IPost | null> => {
   return post;
 };
 
+
 const getPostsForFeed = async (
   userId: string,
   page = 1,
   limit = 10,
-  searchText = "",
+  searchText = ""
 ) => {
-  const filters = {
-    $or: [
+  const skip = (page - 1) * limit;
+
+  const filters: any = {};
+
+  if (searchText) {
+    filters.$text = { $search: searchText }; 
+  }
+
+  if (Types.ObjectId.isValid(userId)) {
+    filters.$or = [
       { author: new Types.ObjectId(userId) },
-      { author: { $ne: new Types.ObjectId(userId) }, policy: "PUBLISH" },
-    ],
+      { policy: "PUBLISH" },                 
+    ];
+  } else {
+    filters.policy = "PUBLISH";
+  }
+
+  const [data, total] = await Promise.all([
+    PostModel.find({})
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate("author", "fullName image")
+      .lean(),
+
+    PostModel.countDocuments(filters),
+  ]);
+
+  const postsWithCounts = await PostModel.populate(data, [
+    { path: "likesCount" },
+    { path: "commentsCount" },
+  ]);
+
+  return {
+    meta: {
+      page,
+      limit,
+      total,
+      totalPage: Math.ceil(total / limit),
+    },
+    data: postsWithCounts,
   };
-
-  const result = await searchPaginate<IPost>({
-    model: PostModel,
-    searchFields: ["content"] as (keyof IPost)[],
-    search: searchText,
-    filters,
-    page,
-    limit,
-    sortBy: "createdAt",
-    sortOrder: "desc",
-    populate: [
-      { path: "author", select: "name email avatar" },
-      { path: "likesCount" },
-      { path: "commentsCount" },
-      { path: "comments" },
-    ],
-    skipCount: false,
-  });
-
-  return result;
 };
+
 
 export const PostService = {
   createPost,

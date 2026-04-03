@@ -32,7 +32,7 @@ const UserSchema = new Schema<IUser>(
       index: true,
     },
     phoneNo: { type: String },
-    image: { type: String },
+    image: { type: String, default:"https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah" },
     password: { type: String, required: true, select: false },
     role: {
       type: String,

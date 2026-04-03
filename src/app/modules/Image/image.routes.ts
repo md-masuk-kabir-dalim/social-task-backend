@@ -10,12 +10,12 @@ router.post(
   "/upload",
   auth(),
   upload.single("file"),
-  validateMaliciousFile,
+  // validateMaliciousFile,
   ImageController.uploadImage
 );
 router.delete("/delete", auth(), ImageController.deleteImage);
 router.patch(
-  "/update",
+  "/update",  
   auth(),
   upload.single("file"),
   validateMaliciousFile,

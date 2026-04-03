@@ -5,8 +5,9 @@ import ApiError from "../../../errors/ApiErrors";
 import sendResponse from "../../../shared/sendResponse";
 
 const uploadImage = catchAsync(async (req: Request, res: Response) => {
+  console.log("hoyyyyyyyyyyyyyyyyyyy")
   if (!req.file) throw new ApiError(404, "No file uploaded");
-  const folder = "product_images";
+  const folder = "social_images";
   const result: any = await imageService.uploadToCloudinary(
     req.file.buffer,
     folder

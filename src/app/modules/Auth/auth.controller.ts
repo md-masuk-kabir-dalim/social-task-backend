@@ -5,7 +5,7 @@ import sendResponse from "../../../shared/sendResponse";
 import { AuthServices } from "./auth.service";
 import ApiError from "../../../errors/ApiErrors";
 import { OtpType } from "./otp.model";
-import { clearCookie, setCookie } from "../../../utils/cookieHelper";
+import { clearCookie, getCookieName, setCookie } from "../../../utils/cookieHelper";
 
 /** =======================
  * REGISTER USER
@@ -76,7 +76,8 @@ const loginUser = catchAsync(async (req: Request, res: Response) => {
  * REFRESH TOKEN
  * ======================= */
 const refreshToken = catchAsync(async (req: Request, res: Response) => {
-  const token = req.cookies?.refreshToken;
+  const token = req.cookies?.[getCookieName("REFRESH")];
+  console.log(token)
   if (!token)
     throw new ApiError(httpStatus.UNAUTHORIZED, "Refresh token missing");
 

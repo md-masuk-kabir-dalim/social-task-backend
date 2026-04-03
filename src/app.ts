@@ -43,9 +43,17 @@ app.use(cookieParser());
 app.use(helmetMiddleware());
 app.use(hpp());
 app.use(compression());
-app.use(express.json({ limit: "10mb" }));
 app.use(xssSanitizerMiddleware);
 app.use(express.static("public"));
+
+
+
+app.use((req, res, next) => {
+  if (req.is("multipart/form-data")) return next(); 
+  express.json({ limit: "10mb" })(req, res, next);
+});
+
+
 
 // Validate content type for non-GET requests
 app.use((req, res, next) => {

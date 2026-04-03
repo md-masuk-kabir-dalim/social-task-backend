@@ -5,7 +5,13 @@ import { PostService } from "./post.service";
 import httpStatus from "http-status";
 
 const createPost = catchAsync(async (req: Request, res: Response) => {
-  const postData = req.body;
+  const userId = req.user?.id;
+  const postData = {
+    ...req.body,
+  }
+  
+  if (userId) postData.author = userId;
+
   const result = await PostService.createPost(postData);
 
   sendResponse(res, {
@@ -53,6 +59,7 @@ const deletePost = catchAsync(async (req: Request, res: Response) => {
 const getPostsForFeed = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user?.id;
   const { page, limit, search } = req.query;
+
   const result = await PostService.getPostsForFeed(
     userId!,
     Number(page) || 1,
@@ -63,7 +70,8 @@ const getPostsForFeed = catchAsync(async (req: Request, res: Response) => {
     statusCode: httpStatus.OK,
     success: true,
     message: "Posts retrieved successfully",
-    data: result,
+    data: result.data,
+    meta:result.meta,
   });
 });
 

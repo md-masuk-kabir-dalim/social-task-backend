@@ -49,8 +49,6 @@ const auth = (...roles: string[]) => {
         secret = config.jwt.access_secret;
       }
 
-      console.log(secret, "oooooooooooooooo");
-
       let verifiedUser: any = jwtHelpers.verifyToken(token, secret);
 
       console.log(verifiedUser);
@@ -69,12 +67,11 @@ const auth = (...roles: string[]) => {
 
       next();
     } catch (err) {
-      next(err);
-    } finally {
       clearCookie(res, "ACCESS");
       clearCookie(res, "REFRESH");
       clearCookie(res, "OTP");
-    }
+      next(err);
+    } 
   };
 };
 
