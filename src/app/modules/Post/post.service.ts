@@ -48,10 +48,6 @@ const getPostsForFeed = async (
 
   const filters: any = {};
 
-  if (searchText) {
-    filters.$text = { $search: searchText }; 
-  }
-
   if (Types.ObjectId.isValid(userId)) {
     filters.$or = [
       { author: new Types.ObjectId(userId) },
@@ -62,7 +58,7 @@ const getPostsForFeed = async (
   }
 
   const [data, total] = await Promise.all([
-    PostModel.find({})
+    PostModel.find(filters)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
