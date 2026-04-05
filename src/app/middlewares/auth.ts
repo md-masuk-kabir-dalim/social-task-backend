@@ -70,7 +70,7 @@ const auth = (...roles: string[]) => {
       clearCookie(res, "ACCESS");
       clearCookie(res, "REFRESH");
       clearCookie(res, "OTP");
-      next(err);
+      next(err);//
     } 
   };
 };
