@@ -6,76 +6,73 @@ import { jwtHelpers } from "../../../utils/jwtHelpers";
 import { comparePassword, hashPassword } from "../../../utils/passwordHelpers";
 import { IUser } from "../User/user.interface";
 import generateOtp from "../../../helpers/generateOtp";
-import { otpEmail } from "../../../emails/otpEmail";
 import sendOtp from "../../../helpers/sendOtp";
 import { UserModel, UserRole } from "../User/user.model";
 import { OtpModel, OtpType } from "./otp.model";
-import emailSender from "../../../helpers/emailSender";
 
-// ------------------------------
-// CHECK EMAIL EXISTS
-// ------------------------------
-const checkEmailExists = async (email: string) => {
+/* =========================
+   EMAIL CHECK
+========================= */
+const assertEmailNotTaken = async (email: string) => {
   const user = await UserModel.findOne({ email });
-  if (user) throw new ApiError(httpStatus.BAD_REQUEST, "Email already in use");
+  if (user) throw new ApiError(400, "Email already exists");
 };
 
-// ------------------------------
-// REGISTER USER
-// ------------------------------
+/* =========================
+   REGISTER
+========================= */
 const registerUser = async (payload: IUser) => {
-  await checkEmailExists(payload.email);
+  await assertEmailNotTaken(payload.email);
 
   const hashed = await hashPassword(payload.password);
   const { otp, expiry } = generateOtp();
 
-  const newUser = new UserModel({
+  const user = await UserModel.create({
     firstName: payload.firstName,
     lastName: payload.lastName,
     email: payload.email,
     password: hashed,
     role: UserRole.USER,
+    isVerified: false,
     tokenVersion: 1,
   });
 
-  await newUser.save();
-
-  // Save OTP
   await OtpModel.create({
     otpCode: otp,
     expiresAt: expiry,
     identifier: payload.email,
     type: OtpType.EMAIL_VERIFICATION,
-    userId: newUser._id,
+    userId: user._id,
   });
 
   const otpToken = await sendOtp(
     payload.email,
     OtpType.EMAIL_VERIFICATION,
-    newUser?.fullName,
-    newUser._id.toString(),
+    user.fullName,
+    user._id.toString(),
     config.jwt.verification_secret,
     config.jwt.otp_expires_in,
-    "Verify your email",
+    "Verify your email"
   );
 
-  return { message: "OTP sent to email", token: otpToken?.otpToken, otpToken };
+  return {
+    message: "Verification code sent to email",
+    data: { otpToken: otpToken.otpToken },
+  };
 };
 
-// ------------------------------
-// VERIFY USER OTP
-// ------------------------------
+/* =========================
+   VERIFY OTP
+========================= */
 const verifyOtp = async (email: string, otp: string, type: OtpType) => {
   const user = await UserModel.findOne({ email });
-
   if (!user) throw new ApiError(404, "User not found");
 
   const otpRecord = await OtpModel.findOne({ identifier: email, type });
 
-  if (!otpRecord) throw new ApiError(400, "OTP not found");
-
-  if (otpRecord.attempts >= 5)
-    throw new ApiError(400, "Maximum OTP attempts exceeded");
+  if (!otpRecord) throw new ApiError(400, "OTP invalid");
+  if (otpRecord.expiresAt < new Date()) throw new ApiError(400, "OTP expired");
+  if (otpRecord.attempts >= 5) throw new ApiError(400, "Too many attempts");
 
   if (otpRecord.otpCode !== otp) {
     otpRecord.attempts += 1;
@@ -83,18 +80,15 @@ const verifyOtp = async (email: string, otp: string, type: OtpType) => {
     throw new ApiError(400, "Invalid OTP");
   }
 
-  if (otpRecord.expiresAt < new Date()) throw new ApiError(400, "OTP expired");
-
-  await OtpModel.deleteMany({ identifier: email });
+  await OtpModel.deleteOne({ identifier: email, type });
 
   user.isVerified = true;
-
   await user.save();
 
   const accessToken = jwtHelpers.generateToken(
-    { id: user._id, email: user.email, role: user.role, type },
-    config.jwt.access_secret as Secret,
-    config.jwt.access_expires_in,
+    { id: user._id, email: user.email, role: user.role },
+    config.jwt.access_secret,
+    config.jwt.access_expires_in
   );
 
   const refreshToken = jwtHelpers.generateToken(
@@ -104,38 +98,35 @@ const verifyOtp = async (email: string, otp: string, type: OtpType) => {
       role: user.role,
       tokenVersion: user.tokenVersion,
     },
-    config.jwt.refresh_secret as Secret,
-    config.jwt.refresh_expires_in,
+    config.jwt.refresh_secret,
+    config.jwt.refresh_expires_in
   );
 
-  return { accessToken, refreshToken };
+  return {
+    message: "Email verified successfully",
+    data: { accessToken, refreshToken },
+  };
 };
 
-// ------------------------------
-// LOGIN USER
-// ------------------------------
+/* =========================
+   LOGIN
+========================= */
 const loginUser = async (email: string, password: string) => {
   const user = await UserModel.findOne({ email }).select("+password");
-
   if (!user) throw new ApiError(404, "User not found");
 
   if (user.lockUntil && user.lockUntil > new Date())
-    throw new ApiError(400, "Account locked");
+    throw new ApiError(403, "Account locked");
 
-  if (user.status === "DELETED")
-    throw new ApiError(403, "Your account is deleted");
+  const isValid = await comparePassword(password, user.password);
 
-  const valid = await comparePassword(password, user.password);
-
-  if (!valid) {
-    user.loginAttempts++;
-
+  if (!isValid) {
+    user.loginAttempts += 1;
     if (user.loginAttempts >= 5) {
       user.lockUntil = new Date(Date.now() + 15 * 60 * 1000);
     }
-
     await user.save();
-    throw new ApiError(403, "Wrong password");
+    throw new ApiError(401, "Invalid credentials");
   }
 
   if (!user.isVerified) {
@@ -146,10 +137,10 @@ const loginUser = async (email: string, password: string) => {
       {
         otpCode: otp,
         expiresAt: expiry,
-        type: "EMAIL_VERIFICATION",
+        type: OtpType.EMAIL_VERIFICATION,
         userId: user._id,
       },
-      { upsert: true, new: true },
+      { upsert: true }
     );
 
     const otpToken = await sendOtp(
@@ -159,26 +150,24 @@ const loginUser = async (email: string, password: string) => {
       user._id.toString(),
       config.jwt.verification_secret,
       config.jwt.otp_expires_in,
-      "Verify your email",
+      "Verify your email"
     );
 
     return {
-      message: "Please verify your email to login",
-      token: otpToken?.otpToken,
-      isVerify: false,
+      message: "Email not verified. OTP sent again",
+      data: { otpToken: otpToken.otpToken },
     };
   }
 
   user.loginAttempts = 0;
   user.lockUntil = undefined;
   user.lastLoginAt = new Date();
-
   await user.save();
 
   const accessToken = jwtHelpers.generateToken(
     { id: user._id, email: user.email, role: user.role },
     config.jwt.access_secret,
-    config.jwt.access_expires_in,
+    config.jwt.access_expires_in
   );
 
   const refreshToken = jwtHelpers.generateToken(
@@ -189,38 +178,37 @@ const loginUser = async (email: string, password: string) => {
       tokenVersion: user.tokenVersion,
     },
     config.jwt.refresh_secret,
-    config.jwt.refresh_expires_in,
+    config.jwt.refresh_expires_in
   );
 
   return {
     message: "Login successful",
-    isVerify: user.isVerified,
     data: { accessToken, refreshToken },
   };
 };
 
-// ------------------------------
-// REFRESH TOKEN
-// ------------------------------
+/* =========================
+   REFRESH TOKEN
+========================= */
 const refreshToken = async (token: string) => {
   let decoded;
 
   try {
     decoded = jwtHelpers.verifyToken(token, config.jwt.refresh_secret);
-  } catch (error) {
-    throw new ApiError(401, "Invalid refresh token");
+  } catch {
+    throw new ApiError(401, "Invalid token");
   }
 
   const user = await UserModel.findById(decoded.id);
-  if (!user) throw new ApiError(401, "User not found");
+  if (!user) throw new ApiError(404, "User not found");
 
   if (decoded.tokenVersion !== user.tokenVersion)
-    throw new ApiError(401, "Refresh token expired or reused");
+    throw new ApiError(401, "Session expired");
 
   const accessToken = jwtHelpers.generateToken(
     { id: user._id, email: user.email, role: user.role },
     config.jwt.access_secret,
-    config.jwt.access_expires_in,
+    config.jwt.access_expires_in
   );
 
   const newRefreshToken = jwtHelpers.generateToken(
@@ -231,14 +219,17 @@ const refreshToken = async (token: string) => {
       tokenVersion: user.tokenVersion,
     },
     config.jwt.refresh_secret,
-    config.jwt.refresh_expires_in,
+    config.jwt.refresh_expires_in
   );
 
-  return { accessToken, refreshToken: newRefreshToken };
+  return {
+    message: "Token refreshed",
+    data: { accessToken, refreshToken: newRefreshToken },
+  };
 };
 
 // ------------------------------
-// GET PROFILE
+// PROFILE
 // ------------------------------
 const getMyProfile = async (email: string) => {
   const profile = await UserModel.findOne(
@@ -252,13 +243,17 @@ const getMyProfile = async (email: string) => {
       role: 1,
       isVerified: 1,
       createdAt: 1,
-      updatedAt: 1,
-    },
+    }
   );
 
-  if (!profile) throw new ApiError(404, "User not found");
+  if (!profile) {
+    throw new ApiError(httpStatus.NOT_FOUND, "User not found");
+  }
 
-  return profile;
+  return {
+    message: "Profile fetched successfully",
+    data: profile,
+  };
 };
 
 // ------------------------------
@@ -266,11 +261,17 @@ const getMyProfile = async (email: string) => {
 // ------------------------------
 const resetPassword = async (email: string, newPassword: string) => {
   const user = await UserModel.findOne({ email });
-  if (!user) throw new ApiError(404, "User not found");
 
-  const hashedPassword = await hashPassword(newPassword);
+  if (!user) {
+    throw new ApiError(httpStatus.NOT_FOUND, "User not found");
+  }
 
-  await UserModel.updateOne({ _id: user._id }, { password: hashedPassword });
+  const hashed = await hashPassword(newPassword);
+
+  await UserModel.updateOne(
+    { _id: user._id },
+    { password: hashed }
+  );
 
   return { message: "Password reset successful" };
 };
@@ -280,18 +281,27 @@ const resetPassword = async (email: string, newPassword: string) => {
 // ------------------------------
 const changePassword = async (
   userId: string,
-  newPassword: string,
   oldPassword: string,
+  newPassword: string
 ) => {
   const user = await UserModel.findById(userId);
-  if (!user) throw new ApiError(404, "User not found");
 
-  const isCorrect = await comparePassword(oldPassword, user.password);
-  if (!isCorrect) throw new ApiError(401, "Old password incorrect");
+  if (!user) {
+    throw new ApiError(httpStatus.NOT_FOUND, "User not found");
+  }
 
-  const hashedPassword = await hashPassword(newPassword);
+  const isMatch = await comparePassword(oldPassword, user.password);
 
-  await UserModel.updateOne({ _id: userId }, { password: hashedPassword });
+  if (!isMatch) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, "Old password is incorrect");
+  }
+
+  const hashed = await hashPassword(newPassword);
+
+  await UserModel.updateOne(
+    { _id: userId },
+    { password: hashed }
+  );
 
   return { message: "Password changed successfully" };
 };
@@ -306,13 +316,13 @@ const sendOtpService = async (email: string, type: OtpType) => {
   let secret = "";
 
   if (type === "EMAIL_VERIFICATION") {
-    if (user.isVerified) throw new ApiError(400, "User is already verified");
+    if (user.isVerified) throw new ApiError(400, "Already verified");
 
     secret = config.jwt.verification_secret;
   } else if (type === "PASSWORD_RESET") {
     secret = config.jwt.password_reset_secret;
   } else {
-    throw new ApiError(400, "Invalid OTP type");
+    throw new ApiError(400, "Invalid request");
   }
 
   const otpToken = await sendOtp(
@@ -325,7 +335,7 @@ const sendOtpService = async (email: string, type: OtpType) => {
     type === "EMAIL_VERIFICATION" ? "Verify your email" : "Reset Password",
   );
 
-  return { message: "OTP sent to email", data: otpToken };
+  return {message: "OTP sent successfully", data: otpToken };
 };
 
 /* ===========================
@@ -333,7 +343,10 @@ const sendOtpService = async (email: string, type: OtpType) => {
 =========================== */
 const logout = async (userId: string) => {
   const user = await UserModel.findById(userId);
-  if (!user) throw new ApiError(httpStatus.NOT_FOUND, "User not found");
+
+  if (!user) {
+    throw new ApiError(httpStatus.NOT_FOUND, "User not found");
+  }
 
   user.tokenVersion += 1;
   await user.save();

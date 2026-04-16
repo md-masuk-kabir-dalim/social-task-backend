@@ -1,15 +1,49 @@
 import express from "express";
 import { ReplyController } from "./reply.controller";
 import auth from "../../middlewares/auth";
+import validateRequest from "../../middlewares/validateRequest";
+import { ReplyValidation } from "./reply.validation";
 
 const router = express.Router();
 
-router.post("/create", auth(), ReplyController.createReply);
+/* ======================
+   CREATE REPLY
+====================== */
+router.post(
+  "/create",
+  auth(),
+  validateRequest(ReplyValidation.createReplySchema),
+  ReplyController.createReply
+);
 
-router.get("/:replyId", auth(), ReplyController.getReplyById);
+/* ======================
+   GET REPLY BY ID
+====================== */
+router.get(
+  "/:replyId",
+  auth(),
+  validateRequest(ReplyValidation.replyIdSchema),
+  ReplyController.getReplyById
+);
 
-router.patch("/:replyId", auth(), ReplyController.updateReply);
+/* ======================
+   UPDATE REPLY
+====================== */
+router.patch(
+  "/:replyId",
+  auth(),
+  validateRequest(ReplyValidation.updateReplySchema),
+  ReplyController.updateReply
+);
 
-router.delete("/:replyId", auth(), ReplyController.deleteReply);
+/* ======================
+   DELETE REPLY
+====================== */
+router.delete(
+  "/:replyId",
+  auth(),
+  validateRequest(ReplyValidation.replyIdSchema),
+  ReplyController.deleteReply
+);
 
 export const ReplyRoutes = router;

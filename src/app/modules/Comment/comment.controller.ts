@@ -4,76 +4,87 @@ import catchAsync from "../../../shared/catchAsync";
 import sendResponse from "../../../shared/sendResponse";
 import { CommentService } from "./comment.service";
 
+/* ======================
+   CREATE COMMENT
+====================== */
 const createComment = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user?.id;
 
-  const payload = {
+  const result = await CommentService.createComment({
     ...req.body,
-    author: userId, 
-  };
-
-  const result = await CommentService.createComment(payload);
+    author: userId,
+  });
 
   sendResponse(res, {
     statusCode: httpStatus.CREATED,
     success: true,
-    message: "Comment created successfully",
-    data: result,
+    message: result.message,
+    data: result.data,
   });
 });
 
+/* ======================
+   GET BY ID
+====================== */
 const getCommentById = catchAsync(async (req: Request, res: Response) => {
-  const { id } = req.params;
-
-  const result = await CommentService.getCommentById(id);
+  const result = await CommentService.getCommentById(req.params.id);
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "Comment retrieved successfully",
-    data: result,
+    message: result.message,
+    data: result.data,
   });
 });
 
+/* ======================
+   UPDATE
+====================== */
 const updateComment = catchAsync(async (req: Request, res: Response) => {
-  const { id } = req.params;
-  const updateData = req.body;
-
-  const result = await CommentService.updateComment(id, updateData);
-
-  sendResponse(res, {
-    statusCode: httpStatus.OK,
-    success: true,
-    message: "Comment updated successfully",
-    data: result,
-  });
-});
-
-
-const deleteComment = catchAsync(async (req: Request, res: Response) => {
-  const { id } = req.params;
-
-  const result = await CommentService.deleteComment(id);
-
-  sendResponse(res, {
-    statusCode: httpStatus.OK,
-    success: true,
-    message: "Comment deleted successfully",
-    data: result,
-  });
-});
-
-
-const getCommentsByPost = catchAsync(async (req: Request, res: Response) => {
-  const { postId } = req.params;
   const userId = req.user?.id;
-  const result = await CommentService.getCommentForPostId(postId, userId);
+  const result = await CommentService.updateComment(
+    req.params.id,
+    userId,
+    req.body
+  );
 
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "Comments retrieved successfully",
-    data: result,
+    message: result.message,
+    data: result.data,
+  });
+});
+
+/* ======================
+   DELETE
+====================== */
+const deleteComment = catchAsync(async (req: Request, res: Response) => {
+  const userId = req.user?.id;
+  const result = await CommentService.deleteComment(req.params.id,userId);
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: result.message,
+    data: result.data,
+  });
+});
+
+/* ======================
+   COMMENTS BY POST
+====================== */
+const getCommentsByPost = catchAsync(async (req: Request, res: Response) => {
+  const result = await CommentService.getCommentForPostId(
+    req.params.postId,
+    req.user?.id
+  );
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: result.message,
+    data: result.data,
   });
 });
 

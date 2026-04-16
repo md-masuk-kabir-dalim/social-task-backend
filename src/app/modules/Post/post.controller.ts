@@ -4,74 +4,86 @@ import sendResponse from "../../../shared/sendResponse";
 import { PostService } from "./post.service";
 import httpStatus from "http-status";
 
+/* =========================
+   CREATE POST
+========================= */
 const createPost = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user?.id;
-  const postData = {
-    ...req.body,
-  }
-  
-  if (userId) postData.author = userId;
 
-  const result = await PostService.createPost(postData);
+  const result = await PostService.createPost({
+    ...req.body,
+    author: userId,
+  });
 
   sendResponse(res, {
     statusCode: httpStatus.CREATED,
     success: true,
-    message: "Post created successfully",
-    data: result,
+    message: result.message,
+    data: result.data,
   });
 });
 
+/* =========================
+   GET POST BY ID
+========================= */
 const getPostById = catchAsync(async (req: Request, res: Response) => {
-  const { id } = req.params;
-  const result = await PostService.getPostById(id);
+  const result = await PostService.getPostById(req.params.id);
+
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "Post retrieved successfully",
-    data: result,
+    message: result.message,
+    data: result.data,
   });
 });
 
+/* =========================
+   UPDATE POST
+========================= */
 const updatePost = catchAsync(async (req: Request, res: Response) => {
-  const { id } = req.params;
-  const updateData = req.body;
-  const result = await PostService.updatePost(id, updateData);
+  const result = await PostService.updatePost(req.params.id, req.body);
+
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "Post updated successfully",
-    data: result,
+    message: result.message,
+    data: result.data,
   });
 });
 
+/* =========================
+   DELETE POST
+========================= */
 const deletePost = catchAsync(async (req: Request, res: Response) => {
-  const { id } = req.params;
-  const result = await PostService.deletePost(id);
+  const result = await PostService.deletePost(req.params.id);
+
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "Post deleted successfully",
-    data: result,
+    message: result.message,
+    data: result.data,
   });
 });
 
+/* =========================
+   FEED (PAGINATED)
+========================= */
 const getPostsForFeed = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user?.id;
-  const { page, limit, search } = req.query;
 
   const result = await PostService.getPostsForFeed(
-    userId!,
-    Number(page) || 1,
-    Number(limit) || 10,
-    String(search) || "",
+    userId,
+    Number(req.query.page) || 1,
+    Number(req.query.limit) || 10,
+    String(req.query.search || "")
   );
+
   sendResponse(res, {
     statusCode: httpStatus.OK,
     success: true,
-    message: "Posts retrieved successfully",
+    message: result.message,
     data: result.data,
-    meta:result.meta,
+    meta: result.meta,
   });
 });
 

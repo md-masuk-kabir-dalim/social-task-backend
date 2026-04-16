@@ -1,14 +1,38 @@
 import express from "express";
 import { CommentController } from "./comment.controller";
 import auth from "../../middlewares/auth";
+import validateRequest from "../../middlewares/validateRequest";
+import { CommentValidation } from "./comment.validation";
 
 const router = express.Router();
 
-router.post("/", auth(), CommentController.createComment);
-router.get("/:id", CommentController.getCommentById);
-router.patch("/:id", auth(), CommentController.updateComment);
-router.delete("/:id", auth(), CommentController.deleteComment);
+/* CREATE COMMENT */
+router.post(
+  "/",
+  auth(),
+  validateRequest(CommentValidation.createCommentSchema),
+  CommentController.createComment
+);
 
-router.get("/post/:postId", CommentController.getCommentsByPost);
+/* GET COMMENTS BY POST */
+router.get(
+  "/post/:postId",
+  auth(),
+  CommentController.getCommentsByPost
+);
+
+/* GET COMMENT BY ID */
+router.get("/:id", auth(), CommentController.getCommentById);
+
+/* UPDATE COMMENT */
+router.patch(
+  "/:id",
+  auth(),
+  validateRequest(CommentValidation.updateCommentSchema),
+  CommentController.updateComment
+);
+
+/* DELETE COMMENT */
+router.delete("/:id", auth(), CommentController.deleteComment);
 
 export const CommentRoutes = router;

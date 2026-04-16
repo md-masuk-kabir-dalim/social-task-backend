@@ -1,90 +1,179 @@
-import {  Types } from "mongoose";
-import { IPost } from "./post.interface";
+import { Types } from "mongoose";
 import { PostModel } from "./post.model";
-import { searchPaginate } from "../../../helpers/searchAndPaginate";
-const isValidObjectId = (id: string) => Types.ObjectId.isValid(id);
+import { IPost } from "./post.interface";
 
-const createPost = async (postData: Partial<IPost>): Promise<IPost> => {
-  const created = await PostModel.create(postData);
-  return created;
+/* =========================
+   CREATE POST
+========================= */
+const createPost = async (payload: Partial<IPost>) => {
+  const post = await PostModel.create(payload);
+
+  return {
+    message: "Post created successfully",
+    data: post,
+  };
 };
 
-
-const getPostById = async (postId: string): Promise<IPost | null> => {
-  const post = await PostModel.findById(postId)
-    .populate("author", "name email")
+/* =========================
+   GET POST BY ID
+========================= */
+const getPostById = async (id: string) => {
+  const post = await PostModel.findById(id)
+    .populate("author", "fullName image")
     .populate("likesCount")
-    .populate("commentsCount")
-    .populate({
-      path: "comments",
-      populate: { path: "author", select: "name email" },
-    });
-  return post;
+    .populate("commentsCount");
+
+  if (!post) {
+    throw new Error("Post not found");
+  }
+
+  return {
+    message: "Post retrieved successfully",
+    data: post,
+  };
 };
 
-const updatePost = async (
-  postId: string,
-  updateData: Partial<IPost>,
-): Promise<IPost | null> => {
-  const post = await PostModel.findByIdAndUpdate(postId, updateData, {
+/* =========================
+   UPDATE POST (SAFE)
+========================= */
+const updatePost = async (id: string, payload: Partial<IPost>) => {
+  const post = await PostModel.findByIdAndUpdate(id, payload, {
     new: true,
   });
-  return post;
+
+  if (!post) throw new Error("Post not found");
+
+  return {
+    message: "Post updated successfully",
+    data: post,
+  };
 };
 
-const deletePost = async (postId: string): Promise<IPost | null> => {
-  const post = await PostModel.findByIdAndDelete(postId);
-  return post;
+/* =========================
+   DELETE POST
+========================= */
+const deletePost = async (id: string) => {
+  const post = await PostModel.findByIdAndDelete(id);
+
+  if (!post) throw new Error("Post not found");
+
+  return {
+    message: "Post deleted successfully",
+    data: post,
+  };
 };
 
-
-const getPostsForFeed = async (
+/* =========================
+   FEED 
+========================= */
+ const getPostsForFeed = async (
   userId: string,
   page = 1,
   limit = 10,
-  searchText = ""
+  searchText = "",
 ) => {
   const skip = (page - 1) * limit;
+  const userObjectId = new Types.ObjectId(userId);
 
-  const filters: any = {};
+  const matchStage: any = {
+    policy: "PUBLISH",
+  };
 
   if (Types.ObjectId.isValid(userId)) {
-    filters.$or = [
-      { author: new Types.ObjectId(userId) },
-      { policy: "PUBLISH" },                 
+    matchStage.$or = [
+      { author: userObjectId },
+      { policy: "PUBLISH" },
     ];
-  } else {
-    filters.policy = "PUBLISH";
   }
 
-  const [data, total] = await Promise.all([
-    PostModel.find(filters)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .populate("author", "fullName image")
-      .lean(),
+  const posts = await PostModel.aggregate([
+    { $match: matchStage },
 
-    PostModel.countDocuments(filters),
+    // author
+    {
+      $lookup: {
+        from: "users",
+        localField: "author",
+        foreignField: "_id",
+        pipeline: [
+          { $project: { fullName: 1, image: 1 } },
+        ],
+        as: "author",
+      },
+    },
+    { $unwind: "$author" },
+
+    // likes
+    {
+      $lookup: {
+        from: "likes",
+        localField: "_id",
+        foreignField: "post",
+        as: "likes",
+      },
+    },
+
+    // comments
+    {
+      $lookup: {
+        from: "comments",
+        localField: "_id",
+        foreignField: "post",
+        as: "comments",
+      },
+    },
+
+    // compute
+    {
+      $addFields: {
+        likesCount: { $size: "$likes" },
+        commentsCount: { $size: "$comments" },
+
+        isLikeMe: {
+          $gt: [
+            {
+              $size: {
+                $filter: {
+                  input: "$likes",
+                  as: "l",
+                  cond: {
+                    $eq: ["$$l.user", userObjectId],
+                  },
+                },
+              },
+            },
+            0,
+          ],
+        },
+      },
+    },
+
+    { $sort: { createdAt: -1 } },
+    { $skip: skip },
+    { $limit: limit },
+
+    {
+      $project: {
+        likes: 0,
+        comments: 0,
+        __v: 0,
+      },
+    },
   ]);
 
-  const postsWithCounts = await PostModel.populate(data, [
-    { path: "likesCount" },
-    { path: "commentsCount" },
-     { path: "likes" },
-  ]);
+  const total = await PostModel.countDocuments(matchStage);
 
   return {
+    message: "Feed retrieved successfully",
     meta: {
       page,
       limit,
       total,
       totalPage: Math.ceil(total / limit),
     },
-    data: postsWithCounts,
+    data: posts,
   };
 };
-
 
 export const PostService = {
   createPost,

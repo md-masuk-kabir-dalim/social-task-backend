@@ -44,33 +44,36 @@ const getReplyById = catchAsync(async (req: Request, res: Response) => {
 // Update a reply
 const updateReply = catchAsync(async (req: Request, res: Response) => {
   const { replyId } = req.params;
-  const updateData = req.body;
+  const userId = req.user?.id;
 
-  const reply = await ReplyService.updateReply(replyId, updateData);
-
-  if (!reply) throw new Error("Reply not found or cannot update");
+  const result = await ReplyService.updateReply(
+    replyId,
+    userId,
+    req.body
+  );
 
   sendResponse(res, {
     statusCode: 200,
     success: true,
-    message: "Reply updated successfully",
-    data: reply,
+    message: result.message,
+    data: result.data,
   });
 });
 
 // Delete a reply
 const deleteReply = catchAsync(async (req: Request, res: Response) => {
   const { replyId } = req.params;
+   const userId = req.user?.id;
 
-  const reply = await ReplyService.deleteReply(replyId);
+  const reply = await ReplyService.deleteReply(replyId,userId);
 
   if (!reply) throw new Error("Reply not found or cannot delete");
 
   sendResponse(res, {
     statusCode: 200,
     success: true,
-    message: "Reply deleted successfully",
-    data: reply,
+    message:reply.message,
+    data: reply.data,
   });
 });
 
